@@ -23,6 +23,8 @@ func (labels Labels) Map() map[string]string {
 	return m
 }
 
+const LabelSeparator = ":"
+
 func (labels Labels) Set(pairs ...string) Labels {
 	n := len(pairs)
 	n = n - (n % 2)

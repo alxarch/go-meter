@@ -3,6 +3,7 @@ package meter
 import (
 	"errors"
 	"net"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -100,7 +101,7 @@ func (e *Event) field(labels, input []string) string {
 			if _, ok := e.index[k]; ok {
 				labels[j] = k
 				j++
-				labels[j] = v
+				labels[j] = url.QueryEscape(v)
 				j++
 			}
 		}
@@ -108,7 +109,7 @@ func (e *Event) field(labels, input []string) string {
 	if j == 0 {
 		return "*"
 	}
-	return strings.Join(labels[:j], ":")
+	return strings.Join(labels[:j], LabelSeparator)
 }
 
 func (e *Event) Field(input ...string) string {
@@ -181,7 +182,7 @@ func (e *Event) DimField(dim Dimension, q map[string]string) (field string, ok b
 			if v := q[label]; v != "" && v != "*" {
 				labels[i] = label
 				i++
-				labels[i] = v
+				labels[i] = url.QueryEscape(v)
 				i++
 				n++
 			}
@@ -189,7 +190,7 @@ func (e *Event) DimField(dim Dimension, q map[string]string) (field string, ok b
 	}
 	if n == len(dim) {
 		ok = true
-		field = strings.Join(labels[:i], ":")
+		field = strings.Join(labels[:i], LabelSeparator)
 	}
 	return
 }
