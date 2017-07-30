@@ -2,7 +2,6 @@ package meter
 
 import (
 	"errors"
-	"fmt"
 	"net"
 	"regexp"
 	"strings"
@@ -111,32 +110,15 @@ func (e *Event) field(labels, input []string) string {
 	}
 	return strings.Join(labels[:j], ":")
 }
+
 func (e *Event) Field(input ...string) string {
 	labels := make([]string, 2*len(e.labels))
 	return e.field(labels, input)
 }
 
-func Replacer(labels ...string) *strings.Replacer {
-	n := len(labels)
-	n = n - (n % 2)
-	r := make([]string, n)
-	for i := 0; i < n; i++ {
-		if (i % 2) == 0 {
-			r[i] = fmt.Sprintf("{{%s}}", labels[i])
-		} else {
-			if v := labels[i]; v == "" {
-				r[i] = "*"
-			} else {
-				r[i] = labels[i]
-			}
-		}
-	}
-	return strings.NewReplacer(r...)
-}
-
 func (e *Event) EventName(labels Labels) string {
 	if IsTemplateName(e.name) {
-		return Replacer(labels...).Replace(e.name)
+		return labels.Replacer().Replace(e.name)
 	}
 	return e.name
 }
