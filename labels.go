@@ -1,7 +1,6 @@
 package meter
 
 import (
-	"fmt"
 	"sort"
 	"strings"
 )
@@ -53,24 +52,4 @@ func NormalizeLabels(labels ...string) (out []string) {
 		sort.Strings(out)
 	}
 	return
-}
-
-func (labels Labels) Replacer() *strings.Replacer {
-	n := len(labels)
-	n = n - (n % 2)
-	r := make([]string, n)
-	for i := 0; i < n; i++ {
-		if (i % 2) == 0 {
-			// Key
-			r[i] = fmt.Sprintf("{{%s}}", labels[i])
-		} else {
-			// Value
-			if v := labels[i]; v == "" || v == "*" {
-				r[i] = "*"
-			} else {
-				r[i] = labels[i]
-			}
-		}
-	}
-	return strings.NewReplacer(r...)
 }
