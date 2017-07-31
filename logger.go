@@ -78,20 +78,15 @@ func (e FlushError) Error() string {
 
 type Logger struct {
 	*Registry
-	Aliases     Aliases
-	Resolutions []*Resolution
-	errors      int64
-	wg          sync.WaitGroup
+	Aliases Aliases
+	errors  int64
+	wg      sync.WaitGroup
 }
 
-func NewLogger(resolutions ...*Resolution) *Logger {
-	if len(resolutions) == 0 {
-		resolutions = append(resolutions, NoResolution)
-	}
+func NewLogger() *Logger {
 	return &Logger{
-		Registry:    NewRegistry(),
-		Aliases:     NewAliases(),
-		Resolutions: resolutions,
+		Registry: NewRegistry(),
+		Aliases:  NewAliases(),
 	}
 }
 
