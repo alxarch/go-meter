@@ -107,7 +107,6 @@ type Result struct {
 type SummaryController struct {
 	Resolution *Resolution
 	DB         *DB
-	MaxRecords int
 }
 
 func (c *SummaryController) ServeHTTP(w http.ResponseWriter, r *http.Request) {
