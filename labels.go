@@ -1,6 +1,7 @@
 package meter
 
 import (
+	"net/url"
 	"sort"
 	"strings"
 )
@@ -32,7 +33,7 @@ func (labels Labels) Get(label string) (string, bool) {
 	return "", false
 }
 
-const LabelSeparator = ":"
+const LabelSeparator = ':'
 
 func (labels Labels) Set(pairs ...string) Labels {
 	n := len(pairs)
@@ -62,4 +63,16 @@ func NormalizeLabels(labels ...string) (out []string) {
 		sort.Strings(out)
 	}
 	return
+}
+
+func ParseField(field string) Labels {
+	tmp := strings.Split(field, string(LabelSeparator))
+	n := len(tmp)
+	n -= n % 2
+	for i := 1; i < n; i += 2 {
+		if v, e := url.QueryUnescape(tmp[i]); e == nil {
+			tmp[i] = v
+		}
+	}
+	return Labels(tmp[:n])
 }

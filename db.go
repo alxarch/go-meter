@@ -3,7 +3,7 @@ package meter
 import (
 	"errors"
 	"fmt"
-	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -108,10 +108,11 @@ func (db *DB) SummaryScan(q SummaryQuery) (sum Summary, err error) {
 		return nil, InvalidEventLabelError
 	}
 	labels := event.AliasedLabels(q.Labels, db.Aliases)
-	var match string
-	{
-		labels[event.ValueIndex(group)] = "*"
-		match = event.Field(labels...)
+	match := event.MatchField(group, labels...)
+	var rx *regexp.Regexp
+	if strings.HasSuffix(match, "*") {
+		n := len(match)
+		rx = regexp.MustCompile("^" + match[:n-1] + "[^" + string(LabelSeparator) + "]+$")
 	}
 	cursor := uint64(0)
 	key := event.Key(res, q.Time, labels)
@@ -122,10 +123,22 @@ func (db *DB) SummaryScan(q SummaryQuery) (sum Summary, err error) {
 		if keys, cursor, err = reply.Result(); err != nil {
 			return
 		}
-		fields = append(fields, keys...)
+		if rx == nil {
+			fields = append(fields, keys...)
+		} else {
+			for _, k := range keys {
+				if rx.MatchString(k) {
+					fields = append(fields, k)
+				}
+			}
+
+		}
 		if cursor == 0 {
 			break
 		}
+	}
+	if len(fields) == 0 {
+		return Summary{}, nil
 	}
 	var values []interface{}
 	if values, err = db.Redis.HMGet(key, fields...).Result(); err != nil {
@@ -133,11 +146,7 @@ func (db *DB) SummaryScan(q SummaryQuery) (sum Summary, err error) {
 	}
 	sum = Summary(make(map[string]int64, len(values)))
 	for i, field := range fields {
-		labels := Labels(strings.Split(field, LabelSeparator))
-		if key, ok := labels.Get(group); ok {
-			if k, e := url.QueryUnescape(key); e == nil {
-				key = k
-			}
+		if key, ok := ParseField(field).Get(group); ok {
 			switch value := values[i].(type) {
 			case string:
 				if n, e := strconv.ParseInt(value, 10, 64); e == nil {

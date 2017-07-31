@@ -110,13 +110,41 @@ func (e *Event) field(labels, input []string) string {
 	if j == 0 {
 		return "*"
 	}
-	return strings.Join(labels[:j], LabelSeparator)
+	return strings.Join(labels[:j], string(LabelSeparator))
 }
 func (e *Event) Field(input ...string) string {
 	labels := make([]string, 2*len(e.labels))
 	return e.field(labels, input)
 }
 
+// MatchField returns a redis MATCH argument with an asterisk matcher on the group label
+func (e *Event) MatchField(group string, input ...string) string {
+	labels := make([]string, 2*len(e.labels))
+	n := len(input)
+	n = n - (n % 2)
+	j := 0
+	for i := 0; i < n; i += 2 {
+		k, v := input[i], input[i+1]
+		if k == group {
+			labels[j] = k
+			j++
+			labels[j] = "*"
+			j++
+		}
+		switch v {
+		case "", "*":
+			continue
+		default:
+			if _, ok := e.index[k]; ok {
+				labels[j] = k
+				j++
+				labels[j] = url.QueryEscape(v)
+				j++
+			}
+		}
+	}
+	return strings.Join(labels[:j], string(LabelSeparator))
+}
 func Replacer(labels ...string) *strings.Replacer {
 	n := len(labels)
 	n = n - (n % 2)
@@ -212,7 +240,7 @@ func (e *Event) DimField(dim Dimension, q map[string]string) (field string, ok b
 	}
 	if n == len(dim) {
 		ok = true
-		field = strings.Join(labels[:i], LabelSeparator)
+		field = strings.Join(labels[:i], string(LabelSeparator))
 	}
 	return
 }
