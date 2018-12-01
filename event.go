@@ -177,26 +177,35 @@ func vhash(values []string) (h uint64) {
 }
 
 func vdeepcopy(values []string) []string {
-	s := strings.Builder{}
 	n := 0
+	b := strings.Builder{}
 	for _, v := range values {
 		n += len(v)
 	}
-	s.Grow(n)
+	b.Grow(n)
+	for _, v := range values {
+		b.WriteString(v)
+	}
+	tmp := b.String()
 	cp := make([]string, len(values))
-	for i, v := range values {
-		n = s.Len()
-		s.WriteString(v)
-		v = s.String()
-		cp[i] = v[n:]
+	if len(cp) == len(values) {
+		cp = cp[:len(values)]
+		for i := range values {
+			n = len(values[i])
+			cp[i] = tmp[:n]
+			tmp = tmp[n:]
+		}
 	}
 	return cp
 
 }
 func vcopy(values []string) []string {
 	cp := make([]string, len(values))
-	for i, v := range values {
-		cp[i] = v
+	if len(cp) == len(values) {
+		cp = cp[:len(values)]
+		for i := range values {
+			cp[i] = values[i]
+		}
 	}
 	return cp
 }

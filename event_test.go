@@ -16,16 +16,18 @@ func Test_Event(t *testing.T) {
 	desc := NewCounterDesc("foo", []string{"bar", "baz"})
 	e := NewEvent(desc)
 	e.Add(1, "BAR", "BAZ")
+	e.AddVolatile(1, "BAR", "BAZ")
 
+	AssertEqual(t, e.Len(), 1)
 	s := e.Flush(nil)
 	AssertEqual(t, s, Snapshot{{
 		Values: []string{"BAR", "BAZ"},
-		Count:  1,
+		Count:  2,
 	}})
 	AssertEqual(t, e.get(0).Count, int64(0))
 	e.Merge(s)
 	e.Add(1, "BAR", "BAZ")
-	AssertEqual(t, e.get(0).Count, int64(2))
+	AssertEqual(t, e.get(0).Count, int64(3))
 	e.Flush(nil)
 	e.Pack()
 	AssertEqual(t, e.Len(), 0)
