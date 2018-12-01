@@ -43,6 +43,11 @@ func Test_ParseQuery(t *testing.T) {
 }
 
 func TestClient_Sync(t *testing.T) {
+	conn := rc.Get()
+	defer func() {
+		conn.Do("FLUSHDB")
+		conn.Close()
+	}()
 	handler := &Controller{
 		DB:       NewDB(rc),
 		Registry: reg,
