@@ -2,9 +2,11 @@ package meter
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -191,8 +193,7 @@ func (c *Controller) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		s := getSync()
 		defer putSync(s)
-		s.buf.Reset()
-		_, err := s.buf.ReadFrom(r.Body)
+		err := s.ReadFrom(r.Body)
 		if err != nil {
 			c.Logger.Printf("Failed to read body: %s\n", err)
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -241,15 +242,32 @@ var syncPool sync.Pool
 
 type syncBuffer struct {
 	buf      bytes.Buffer
+	zr       *gzip.Reader
+	zw       *gzip.Writer
+	enc      *json.Encoder
 	snapshot Snapshot
 }
 
+func (s *syncBuffer) ReadFrom(r io.Reader) (err error) {
+	if s.zr == nil {
+		s.zr, err = gzip.NewReader(r)
+	} else {
+		err = s.zr.Reset(r)
+	}
+	if err != nil {
+		return
+	}
+	s.buf.Reset()
+	_, err = s.buf.ReadFrom(s.zr)
+	return
+}
 func getSync() *syncBuffer {
 	if x := syncPool.Get(); x != nil {
 		return x.(*syncBuffer)
 	}
 	return new(syncBuffer)
 }
+
 func putSync(s *syncBuffer) {
 	if s == nil {
 		return
@@ -301,6 +319,25 @@ func (c *Client) Run(ctx context.Context, interval time.Duration, logger *log.Lo
 	}
 }
 
+func (s *syncBuffer) Body() (r io.Reader, err error) {
+	s.buf.Reset()
+	if s.zw == nil {
+		s.zw = gzip.NewWriter(&s.buf)
+	} else {
+		s.zw.Reset(&s.buf)
+	}
+	if s.enc == nil {
+		s.enc = json.NewEncoder(s.zw)
+	}
+	if err := s.enc.Encode(s.snapshot); err != nil {
+		return nil, err
+	}
+	if err := s.zw.Flush(); err != nil {
+		return nil, err
+	}
+	return &s.buf, s.zw.Close()
+}
+
 func (c *Client) Sync(e *Event) error {
 	desc := e.Describe()
 	url := strings.Trim(c.URL, "/") + "/" + desc.Name()
@@ -314,16 +351,23 @@ func (c *Client) Sync(e *Event) error {
 	if len(s.snapshot) == 0 {
 		return nil
 	}
-	s.buf.Reset()
-	enc := json.NewEncoder(&s.buf)
-	if err := enc.Encode(s.snapshot); err != nil {
-		return err
-	}
 	client := c.Client
 	if client == nil {
 		client = http.DefaultClient
 	}
-	res, err := client.Post(url, "application/json", &s.buf)
+	body, err := s.Body()
+	if err != nil {
+		e.Merge(s.snapshot)
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPost, url, body)
+	if err != nil {
+		e.Merge(s.snapshot)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Encoding", "gzip")
+	res, err := client.Do(req)
 	if err != nil {
 		e.Merge(s.snapshot)
 		return err

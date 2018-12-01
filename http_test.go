@@ -1,7 +1,10 @@
 package meter
 
 import (
+	"log"
+	"net/http/httptest"
 	"net/url"
+	"os"
 	"testing"
 	"time"
 
@@ -37,4 +40,20 @@ func Test_ParseQuery(t *testing.T) {
 		Event:      fooEvent,
 	})
 
+}
+
+func TestClient_Sync(t *testing.T) {
+	handler := &Controller{
+		DB:       NewDB(rc),
+		Registry: reg,
+		Logger:   log.New(os.Stderr, "", log.LstdFlags),
+	}
+	s := httptest.NewServer(handler)
+	defer s.Close()
+	c := &Client{
+		URL: s.URL,
+	}
+	event.Add(2, "Foo", "Bar")
+	err := c.Sync(event)
+	AssertNil(t, err)
 }
