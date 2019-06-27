@@ -14,8 +14,9 @@ import (
 )
 
 var reg = meter.NewRegistry()
-var resol = meter.ResolutionDaily.WithTTL(meter.Daily)
-var desc = meter.NewDesc(meter.MetricTypeIncrement, "test", []string{"foo", "bar"}, resol)
+var daily = meter.ResolutionDaily.WithTTL(meter.Daily)
+var hourly = meter.ResolutionHourly.WithTTL(meter.Hourly)
+var desc = meter.NewDesc(meter.MetricTypeIncrement, "test", []string{"foo", "bar"}, daily, hourly)
 var event = meter.NewEvent(desc)
 var rc = redis.NewClient(&redis.Options{
 	Addr: ":6379",
@@ -23,9 +24,16 @@ var rc = redis.NewClient(&redis.Options{
 })
 
 func init() {
+	time.Local = time.UTC
 	reg.Register(event)
 }
 
+func Test_AppendKey(t *testing.T) {
+	db := meter.NewDB(rc)
+	tm := time.Now()
+	k := db.Key(meter.ResolutionHourly, "foo", tm)
+	println(tm.String(), k)
+}
 func Test_ReadWrite(t *testing.T) {
 	defer rc.FlushDB()
 	db := meter.NewDB(rc)
@@ -39,7 +47,8 @@ func Test_ReadWrite(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error %s", err)
 	}
-	if n := db.Redis.HLen(db.Key(meter.ResolutionDaily, "test", now)).Val(); n != 2 {
+	key := db.Key(hourly, "test", now)
+	if n := db.Redis.HLen(key).Val(); n != 2 {
 		t.Errorf("invalid gather %d", n)
 	}
 	if n := event.Len(); n != 2 {
@@ -47,10 +56,9 @@ func Test_ReadWrite(t *testing.T) {
 	}
 	b := meter.NewQueryBuilder()
 	b = b.From("test")
-	b = b.Between(now.Add(-72*3*time.Hour), now)
+	b = b.Between(now, now.Add(time.Hour))
 	b = b.GroupBy("foo")
-	b = b.At(meter.ResolutionDaily)
-	println("Run q")
+	b = b.At(meter.ResolutionHourly)
 	results, err := db.Query(b.Queries(reg)...)
 	if err != nil {
 		t.Errorf("Unexpected error %s", err)
@@ -62,12 +70,12 @@ func Test_ReadWrite(t *testing.T) {
 		println(fmt.Sprintf("result\n%+v\n", r))
 	}
 
-	c := meter.Controller{Q: db, Events: reg, TimeDecoder: resol}
+	c := meter.Controller{Q: db, Events: reg, TimeDecoder: hourly}
 	s := httptest.NewServer(&c)
 	// s.Start()
 	defer s.Close()
-	dt := now.Format(meter.DailyDateFormat)
-	res, err := s.Client().Get(s.URL + "?event=test&start=" + dt + "&end=" + dt + "&res=daily&foo=bar")
+	dt := now.Format(meter.HourlyDateFormat)
+	res, err := s.Client().Get(s.URL + "?event=test&start=" + dt + "&end=" + dt + "&res=hourly&foo=bar")
 	if err != nil {
 		t.Errorf("Unexpected error %s", err)
 	} else if res.StatusCode != http.StatusOK {
@@ -86,8 +94,8 @@ func Test_ReadWrite(t *testing.T) {
 		Mode:       meter.ModeValues,
 		Event:      event,
 		Start:      now,
-		End:        now,
-		Resolution: meter.ResolutionDaily,
+		End:        now.Add(time.Hour),
+		Resolution: meter.ResolutionHourly,
 	})
 	values := results.FrequencyMap()
 	if values["foo"] == nil {
@@ -97,13 +105,13 @@ func Test_ReadWrite(t *testing.T) {
 		Mode:  meter.ModeValues,
 		Event: event,
 		Start: now,
+		End:   now,
 		Values: []map[string]string{
 			map[string]string{
 				"foo": "bar",
 			},
 		},
-		End:        now,
-		Resolution: meter.ResolutionDaily,
+		Resolution: hourly,
 	})
 	values = results.FrequencyMap()
 	if values["foo"] == nil {
