@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
@@ -46,18 +45,13 @@ func Test_ReadWrite(t *testing.T) {
 	if n := event.Len(); n != 2 {
 		t.Errorf("Wrong collector size %d", n)
 	}
-	q := url.Values{}
-	sq := meter.QueryBuilder{
-		Events:     []string{"test"},
-		Start:      now.Add(-72 * 3 * time.Hour),
-		End:        now,
-		Query:      q,
-		Group:      []string{"foo"},
-		Resolution: "daily",
-	}
+	b := meter.NewQueryBuilder()
+	b = b.From("test")
+	b = b.Between(now.Add(-72*3*time.Hour), now)
+	b = b.GroupBy("foo")
+	b = b.At(meter.ResolutionDaily)
 	println("Run q")
-	qs := sq.Queries(reg)
-	results, err := db.Query(qs...)
+	results, err := db.Query(b.Queries(reg)...)
 	if err != nil {
 		t.Errorf("Unexpected error %s", err)
 	}
@@ -84,7 +78,7 @@ func Test_ReadWrite(t *testing.T) {
 		json.Unmarshal(data, &results)
 		r := results.Find("test", meter.LabelValues{"foo": "bar"})
 		if r == nil {
-			t.Errorf("Result not found %s", results)
+			t.Errorf("Result not found %v", results)
 		}
 	}
 
